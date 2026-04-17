@@ -63,6 +63,13 @@ def extract_spreadsheet_id(url: str) -> str:
     return m.group(1)
 
 
+def _quote_sheet_name_for_range(name: str) -> str:
+    # A1 notation: sheet names with non-alphanumeric/underscore chars must be single-quoted and inner single quotes doubled
+    if re.search(r"[^A-Za-z0-9_]", name):
+        return "'" + name.replace("'", "''") + "'"
+    return name
+
+
 def _parse_border_side(border_data: dict | None) -> BorderSide | None:
     if not border_data:
         return None
@@ -315,39 +322,64 @@ def _parse_sheet(sheet: dict, sheet_index: int) -> SheetData:
 def parse_google_sheet(spreadsheet_url: str, credentials) -> WorkbookData:
     """Parse a Google Sheet and return WorkbookData.
 
+    Fetches workbook metadata first, then each sheet's grid data individually
+    to keep peak memory bounded (avoids OOM on Streamlit Cloud for large workbooks).
+
     Args:
         spreadsheet_url: Full URL of the Google Sheet.
         credentials: Google OAuth credentials object.
     """
     spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
-    logger.info("Fetching spreadsheet %s", spreadsheet_id)
+    logger.info('Fetching metadata for spreadsheet %s', spreadsheet_id)
 
     try:
-        service = build("sheets", "v4", credentials=credentials)
-        result = service.spreadsheets().get(
+        service = build('sheets', 'v4', credentials=credentials)
+        meta = service.spreadsheets().get(
             spreadsheetId=spreadsheet_id,
-            includeGridData=True,
+            includeGridData=False,
         ).execute()
     except Exception as e:
         err_str = str(e).lower()
-        if "403" in err_str or "permission" in err_str:
-            raise PermissionDeniedError(f"Permission denied for spreadsheet {spreadsheet_id}: {e}") from e
-        raise WorkbookReadError(f"Failed to fetch spreadsheet: {e}") from e
+        if '403' in err_str or 'permission' in err_str:
+            raise PermissionDeniedError(f'Permission denied for spreadsheet {spreadsheet_id}: {e}') from e
+        raise WorkbookReadError(f'Failed to fetch spreadsheet: {e}') from e
 
-    title = result.get("properties", {}).get("title", "Untitled")
-    sheets_data = result.get("sheets", [])
+    title = meta.get('properties', {}).get('title', 'Untitled')
+    sheet_metas = meta.get('sheets', [])
 
     sheets: list[SheetData] = []
-    for idx, sheet in enumerate(sheets_data):
+    total = len(sheet_metas)
+    for idx, sheet_meta in enumerate(sheet_metas):
+        sheet_title = sheet_meta.get('properties', {}).get('title', f'Sheet{idx}')
+        logger.info('Fetching sheet %d/%d: %s', idx + 1, total, sheet_title)
+        range_expr = _quote_sheet_name_for_range(sheet_title)
         try:
-            sheets.append(_parse_sheet(sheet, idx))
+            sheet_result = service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id,
+                includeGridData=True,
+                ranges=[range_expr],
+            ).execute()
         except Exception as e:
-            sheet_title = sheet.get("properties", {}).get("title", f"Sheet{idx}")
-            logger.error("Error parsing sheet '%s': %s", sheet_title, e)
-            raise ParseError(f"Failed to parse sheet '{sheet_title}': {e}") from e
+            err_str = str(e).lower()
+            if '403' in err_str or 'permission' in err_str:
+                raise PermissionDeniedError(f'Permission denied for spreadsheet {spreadsheet_id}: {e}') from e
+            raise WorkbookReadError(f'Failed to fetch sheet {sheet_title!r}: {e}') from e
+
+        sheet_payloads = sheet_result.get('sheets', [])
+        if not sheet_payloads:
+            logger.warning('No data returned for sheet %s; skipping', sheet_title)
+            continue
+        try:
+            sheets.append(_parse_sheet(sheet_payloads[0], idx))
+        except Exception as e:
+            logger.error('Error parsing sheet %r: %s', sheet_title, e)
+            raise ParseError(f'Failed to parse sheet {sheet_title!r}: {e}') from e
+        finally:
+            del sheet_result
+            del sheet_payloads
 
     return WorkbookData(
-        sourceType="google_sheets",
+        sourceType='google_sheets',
         sourceName=title,
         sheets=sheets,
     )
