@@ -215,18 +215,43 @@ if analyze_clicked:
                 st.error(f"Unexpected error: {type(e).__name__}: {e!s}")
                 st.code(traceback.format_exc(), language='text')
 
+_PREVIEW_LIMIT = 200_000  # 200KB threshold to avoid browser syntax highlighter stack overflow
+
+
+def _render_preview(content: str, language: str, label: str) -> None:
+    size = len(content)
+    if size > _PREVIEW_LIMIT:
+        st.info(
+            f'{label} プレビューは {size:,} bytes と大きすぎるため省略しました。'
+            f' 上部の「{label}ダウンロード」ボタンから取得してください。'
+        )
+        st.text_area(f'{label} 先頭プレビュー', content[:5000] + '\n...', height=200, disabled=True)
+    else:
+        st.code(content, language=language)
+
+
 if outs:
     tab_json, tab_md, tab_prompt = st.tabs(["JSON", "Markdown", "Prompt"])
 
     with tab_json:
+        json_content = outs["json"]
         try:
-            parsed = json.loads(outs["json"])
-            st.code(json.dumps(parsed, indent=2, ensure_ascii=False), language="json")
+            parsed = json.loads(json_content)
+            json_content = json.dumps(parsed, indent=2, ensure_ascii=False)
         except json.JSONDecodeError:
-            st.code(outs["json"], language="json")
+            pass
+        _render_preview(json_content, 'json', 'JSON')
 
     with tab_md:
-        st.markdown(outs["markdown"])
+        md_content = outs["markdown"]
+        if len(md_content) > _PREVIEW_LIMIT:
+            st.info(
+                f'Markdown プレビューは {len(md_content):,} bytes と大きすぎるため省略しました。'
+                ' 上部の「Markdownダウンロード」ボタンから取得してください。'
+            )
+            st.text_area('Markdown 先頭プレビュー', md_content[:5000] + '\n...', height=200, disabled=True)
+        else:
+            st.markdown(md_content)
 
     with tab_prompt:
-        st.code(outs["prompt"], language="text")
+        _render_preview(outs["prompt"], 'text', 'Prompt')
