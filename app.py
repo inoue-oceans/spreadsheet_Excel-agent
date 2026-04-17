@@ -210,8 +210,9 @@ if analyze_clicked:
             except SpreadsheetAgentError as e:
                 st.error(_friendly_error_message(e))
             except Exception as e:
-                st.error(f"Unexpected error: {e!s}")
-                raise
+                import traceback
+                st.error(f"Unexpected error: {type(e).__name__}: {e!s}")
+                st.code(traceback.format_exc(), language='text')
 
 if outs:
     tab_json, tab_md, tab_prompt = st.tabs(["JSON", "Markdown", "Prompt"])
