@@ -19,7 +19,6 @@ from src.models.schema import (
     RowConfig,
     SheetData,
     WorkbookData,
-    WorkbookOutput,
 )
 
 _HEX6 = re.compile(r"^[0-9A-Fa-f]{6}$")
@@ -155,7 +154,8 @@ def _border(b: Optional[Border]) -> Optional[Border]:
     )
 
 
-def _cell_data(c: CellData) -> CellData:
+def _cell_data(c: CellData, detect_hidden: bool) -> CellData:
+    cell_hidden = c.hidden if detect_hidden else False
     return CellData(
         value=c.value,
         displayValue=c.displayValue,
@@ -166,7 +166,7 @@ def _cell_data(c: CellData) -> CellData:
         numberFormat=c.numberFormat,
         border=_border(c.border),
         protection=Protection(locked=c.protection.locked, hidden=c.protection.hidden) if c.protection else None,
-        hidden=c.hidden,
+        hidden=cell_hidden,
         merged=c.merged,
     )
 
@@ -197,26 +197,29 @@ def _cond_rule(r: ConditionalFormattingRule) -> ConditionalFormattingRule:
     )
 
 
-def _sheet(sheet: SheetData) -> SheetData:
+def _sheet(sheet: SheetData, detect_hidden: bool) -> SheetData:
     rows: dict[str, RowConfig] = {}
     for k, v in sheet.rows.items():
         nk = _normalize_row_key(k)
-        rows[nk] = RowConfig(height=v.height, hidden=v.hidden)
+        row_hidden = v.hidden if detect_hidden else False
+        rows[nk] = RowConfig(height=v.height, hidden=row_hidden)
 
     columns: dict[str, ColumnConfig] = {}
     for k, v in sheet.columns.items():
         nk = _normalize_column_key(k)
-        columns[nk] = ColumnConfig(width=v.width, hidden=v.hidden)
+        col_hidden = v.hidden if detect_hidden else False
+        columns[nk] = ColumnConfig(width=v.width, hidden=col_hidden)
 
     cells: dict[str, CellData] = {}
     for ref, c in sheet.cells.items():
         nref = _normalize_cell_coordinate(ref.split("!")[-1])
-        cells[nref] = _cell_data(c)
+        cells[nref] = _cell_data(c, detect_hidden)
 
+    sheet_hidden = sheet.hidden if detect_hidden else False
     return SheetData(
         name=sheet.name,
         index=sheet.index,
-        hidden=sheet.hidden,
+        hidden=sheet_hidden,
         usedRange=_normalize_used_range(sheet.usedRange),
         rows=rows,
         columns=columns,
@@ -226,11 +229,11 @@ def _sheet(sheet: SheetData) -> SheetData:
     )
 
 
-def normalize(workbook_data: WorkbookData) -> WorkbookOutput:
-    wb = workbook_data.model_copy(deep=True)
+def normalize(wb: WorkbookData, detect_hidden: bool = True) -> WorkbookData:
+    copied = wb.model_copy(deep=True)
     normalized = WorkbookData(
-        sourceType=wb.sourceType,
-        sourceName=wb.sourceName,
-        sheets=[_sheet(s) for s in wb.sheets],
+        sourceType=copied.sourceType,
+        sourceName=copied.sourceName,
+        sheets=[_sheet(s, detect_hidden) for s in copied.sheets],
     )
-    return WorkbookOutput(workbook=normalized)
+    return normalized

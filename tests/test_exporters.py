@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from src.models.schema import WorkbookOutput
 from src.parsers.excel_parser import parse_excel
 from src.normalizers.workbook_normalizer import normalize
 from src.exporters.json_exporter import export_json
@@ -14,7 +15,7 @@ SAMPLE = Path(__file__).parent / "sample_test.xlsx"
 
 def _get_output():
     wb = parse_excel(SAMPLE)
-    return normalize(wb)
+    return WorkbookOutput(workbook=normalize(wb))
 
 
 class TestJsonExporter:
