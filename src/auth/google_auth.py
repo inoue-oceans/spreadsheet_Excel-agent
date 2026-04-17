@@ -144,10 +144,18 @@ def get_credentials_streamlit(st_module: Any):
             st_module.query_params.clear()
             raise GoogleAuthError(f"トークン取得に失敗しました: {e}") from e
 
-    auth_url, _state = flow.authorization_url(
-        access_type="offline",
-        prompt="consent",
-        include_granted_scopes="true",
-    )
+    user_email = None
+    try:
+        user_email = getattr(st_module.user, "email", None)
+    except Exception:
+        user_email = None
+    auth_kwargs = {
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+    }
+    if user_email:
+        auth_kwargs["login_hint"] = user_email
+    auth_url, _state = flow.authorization_url(**auth_kwargs)
     st_module.link_button("Google Sheets に接続", auth_url, type="primary")
     return None
