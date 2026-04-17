@@ -71,8 +71,8 @@ def _friendly_error_message(exc: SpreadsheetAgentError) -> str:
         return f"Google認証に失敗しました: {exc!s}"
     if isinstance(exc, PermissionDeniedError):
         return (
-            "Permission denied for this spreadsheet. "
-            "Ask the owner to share it with your Google account or use a URL you can open in the browser."
+            f"Permission denied for this spreadsheet. Details: {exc!s}. "
+            "If you can open the URL in your browser, the OAuth token may belong to a different Google account, or link-only sharing may not grant API access."
         )
     if isinstance(exc, WorkbookReadError):
         return (
