@@ -111,7 +111,8 @@ if input_method == "Excel Upload":
 else:
     sheet_url = st.text_input(
         "Google Sheets URL",
-        placeholder="https://docs.google.com/spreadsheets/d/...",
+        placeholder="https://docs.google.com/spreadsheets/d/.../edit?gid=...",
+        help="URL に gid が含まれる場合は、そのシート1枚だけを分析します（メモリ節約のため）。全シート分析はワークブックが大きいとメモリ不足で失敗します。",
     )
     try:
         creds = google_auth.get_credentials_streamlit(st)

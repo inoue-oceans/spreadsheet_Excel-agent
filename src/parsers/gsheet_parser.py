@@ -29,6 +29,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _SPREADSHEET_ID_RE = re.compile(r"/spreadsheets/d/([a-zA-Z0-9_-]+)")
+_GID_RE = re.compile(r'[?#&]gid=(\d+)')
 
 # Google Sheets border style mapping
 _BORDER_STYLE_MAP = {
@@ -61,6 +62,16 @@ def extract_spreadsheet_id(url: str) -> str:
     if not m:
         raise InvalidSpreadsheetUrlError(f"Cannot extract spreadsheet ID from URL: {url}")
     return m.group(1)
+
+
+def extract_gid(url: str) -> int | None:
+    m = _GID_RE.search(url)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
 
 
 def _quote_sheet_name_for_range(name: str) -> str:
@@ -330,7 +341,8 @@ def parse_google_sheet(spreadsheet_url: str, credentials) -> WorkbookData:
         credentials: Google OAuth credentials object.
     """
     spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
-    logger.info('Fetching metadata for spreadsheet %s', spreadsheet_id)
+    target_gid = extract_gid(spreadsheet_url)
+    logger.info('Fetching metadata for spreadsheet %s (target_gid=%s)', spreadsheet_id, target_gid)
 
     try:
         service = build('sheets', 'v4', credentials=credentials)
@@ -346,6 +358,12 @@ def parse_google_sheet(spreadsheet_url: str, credentials) -> WorkbookData:
 
     title = meta.get('properties', {}).get('title', 'Untitled')
     sheet_metas = meta.get('sheets', [])
+
+    if target_gid is not None:
+        sheet_metas = [s for s in sheet_metas if s.get('properties', {}).get('sheetId') == target_gid]
+        if not sheet_metas:
+            raise WorkbookReadError(f'No sheet with gid={target_gid} found in spreadsheet {spreadsheet_id}')
+        logger.info('Filtered to 1 sheet by gid=%s', target_gid)
 
     sheets: list[SheetData] = []
     total = len(sheet_metas)
