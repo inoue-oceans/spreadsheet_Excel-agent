@@ -117,20 +117,17 @@ else:
         "Google Sheets URL",
         placeholder="https://docs.google.com/spreadsheets/d/...",
     )
-    if st.button("Authenticate", help="Runs OAuth using credentials from .env / credentials.json"):
-        try:
-            creds = google_auth.get_credentials()
+    try:
+        creds = google_auth.get_credentials_streamlit(st)
+        if creds:
             st.session_state.google_creds = creds
-            st.success("Authenticated with Google.")
-        except GoogleAuthError as e:
-            st.error(_friendly_error_message(e))
-        except Exception as e:
-            st.error(f"Authentication failed: {e!s}")
-
-    if st.session_state.google_creds:
-        st.info("Google credentials are ready.")
-    else:
-        st.warning("Not authenticated yet. Use Authenticate before Analyze.")
+            st.success("Google認証済み。スプレッドシートを分析できます。")
+        else:
+            st.info("上の「Google Sheets に接続」ボタンから認証してください。")
+    except GoogleAuthError as e:
+        st.error(_friendly_error_message(e))
+    except Exception as e:
+        st.error(f"認証処理でエラーが発生しました: {e!s}")
 
 col_analyze, col_json, col_md, col_prompt, _col_spacer = st.columns(
     [1, 2, 2.5, 2.5, 4]
