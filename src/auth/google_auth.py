@@ -133,19 +133,26 @@ def get_credentials_streamlit(st_module: Any):
     code = st_module.query_params.get("code")
     if code:
         try:
+            saved_verifier = st_module.session_state.get("sheets_code_verifier")
+            if saved_verifier:
+                flow.code_verifier = saved_verifier
             flow.fetch_token(code=code)
             creds: Credentials = flow.credentials
             st_module.session_state["sheets_creds"] = creds
+            st_module.session_state.pop("sheets_code_verifier", None)
             st_module.query_params.clear()
             st_module.rerun()
         except Exception as e:
             st_module.query_params.clear()
+            st_module.session_state.pop("sheets_code_verifier", None)
             raise GoogleAuthError(f"トークン取得に失敗しました: {e}") from e
 
+    flow.autogenerate_code_verifier = True
     auth_url, _state = flow.authorization_url(
         access_type="offline",
         prompt="consent",
         include_granted_scopes="true",
     )
+    st_module.session_state["sheets_code_verifier"] = flow.code_verifier
     st_module.link_button("Google Sheets に接続", auth_url, type="primary")
     return None
