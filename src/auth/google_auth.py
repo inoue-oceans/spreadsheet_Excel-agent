@@ -85,6 +85,7 @@ def get_credentials_streamlit(st_module: Any):
     2. URL に ?code= があればトークン交換して session_state に保存、st.rerun()
     3. 未認証ならボタンを表示して None を返す
     """
+    os.environ.setdefault('OAUTHLIB_RELAX_TOKEN_SCOPE', '1')
     try:
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
