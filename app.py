@@ -68,11 +68,7 @@ def _friendly_error_message(exc: SpreadsheetAgentError) -> str:
             "Paste the full URL from your browser (e.g. …/spreadsheets/d/…/edit…)."
         )
     if isinstance(exc, GoogleAuthError):
-        return (
-            "Google authentication failed. "
-            "Set GOOGLE_CREDENTIALS_PATH (and optionally GOOGLE_TOKEN_PATH) in `.env`, "
-            "or place `credentials.json` in the working directory, then try again."
-        )
+        return f"Google認証に失敗しました: {exc!s}"
     if isinstance(exc, PermissionDeniedError):
         return (
             "Permission denied for this spreadsheet. "
